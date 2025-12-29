@@ -1,4 +1,4 @@
-# 🛡️ TrustLens AI Security Platform
+# 🛡️ TrustLens AI Security Platform (Ongoing)
 
 A comprehensive, research-grade AI security platform designed to protect Large Language Model (LLM) systems through autonomous red teaming, real-time threat detection, and quantified security metrics. Built for cybersecurity professionals, researchers, and organizations deploying AI systems in production.
 
