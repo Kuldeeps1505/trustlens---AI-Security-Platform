@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustLens SOC Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            min-height: 100vh;
+            overflow-x: auto;
+        }
+
+        .soc-header {
+            background: #1a1a1a;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #00ff00;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .soc-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff00;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 1rem;
+            padding: 1rem;
+            height: calc(100vh - 80px);
+        }
+
+        .panel {
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            color: #00ff00;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-content {
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0;
+        }
+
+        .metric-value {
+            color: #ffff00;
+            font-weight: bold;
+        }
+
+        .critical { color: #ff0000; }
+        .warning { color: #ffaa00; }
+        .success { color: #00ff00; }
+        .info { color: #00aaff; }
+
+        .attack-feed {
+            grid-column: 1;
+            grid-row: 1 / 3;
+        }
+
+        .trust-score {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .red-team {
+            grid-column: 3;
+            grid-row: 1;
+        }
+
+        .security-metrics {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .regression-alerts {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        .attack-evolution {
+            grid-column: 1 / 4;
+            grid-row: 3;
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: #0f0f0f;
+            border-left: 3px solid #333;
+        }
+
+        .log-entry.blocked {
+            border-left-color: #ff0000;
+        }
+
+        .log-entry.flagged {
+            border-left-color: #ffaa00;
+        }
+
+        .log-entry.allowed {
+            border-left-color: #00ff00;
+        }
+
+        .timestamp {
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .attack-type {
+            color: #ff6666;
+            font-weight: bold;
+        }
+
+        .risk-score {
+            color: #ffff00;
+        }
+
+        .evolution-tree {
+            font-family: monospace;
+            white-space: pre;
+            font-size: 0.8rem;
+            overflow-x: auto;
+        }
+
+        .alert {
+            background: #2a1a1a;
+            border: 1px solid #ff6666;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 3px;
+        }
+
+        .alert-header {
+            color: #ff6666;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        .refresh-btn {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.8rem;
+        }
+
+        .refresh-btn:hover {
+            background: #00ff00;
+            color: #000;
+        }
+
+        .chart-container {
+            height: 200px;
+            background: #0f0f0f;
+            border: 1px solid #333;
+            margin: 0.5rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="soc-header">
+        <div class="soc-title">TRUSTLENS SOC DASHBOARD</div>
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator"></div>
+                <span>FIREWALL: ACTIVE</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator"></div>
+                <span>RED TEAM: RUNNING</span>
+            </div>
+            <div class="status-item">
+                <div class="status-indicator"></div>
+                <span>AUDIT: ENABLED</span>
+            </div>
+            <div class="status-item">
+                <span id="current-time"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Live Attack Feed -->
+        <div class="panel attack-feed">
+            <div class="panel-header">
+                LIVE ATTACK FEED
+                <button class="refresh-btn" onclick="refreshAttackFeed()">REFRESH</button>
+            </div>
+            <div class="panel-content" id="attack-feed-content">
+                Loading attack feed...
+            </div>
+        </div>
+
+        <!-- Trust Score -->
+        <div class="panel trust-score">
+            <div class="panel-header">
+                TRUST SCORE
+                <button class="refresh-btn" onclick="refreshTrustScore()">REFRESH</button>
+            </div>
+            <div class="panel-content">
+                <div class="metric-row">
+                    <span>Overall Score:</span>
+                    <span class="metric-value" id="trust-score-overall">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Block Rate:</span>
+                    <span class="metric-value" id="trust-score-block">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>False Positive Rate:</span>
+                    <span class="metric-value" id="trust-score-fp">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Bypass Rate:</span>
+                    <span class="metric-value" id="trust-score-bypass">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Trend:</span>
+                    <span class="metric-value" id="trust-score-trend">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Red Team Pressure -->
+        <div class="panel red-team">
+            <div class="panel-header">
+                RED TEAM PRESSURE
+                <button class="refresh-btn" onclick="refreshRedTeam()">REFRESH</button>
+            </div>
+            <div class="panel-content">
+                <div class="metric-row">
+                    <span>Current Pressure:</span>
+                    <span class="metric-value" id="red-team-pressure">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Active Attacks:</span>
+                    <span class="metric-value" id="red-team-active">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Successful Bypasses:</span>
+                    <span class="metric-value critical" id="red-team-bypasses">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Trend:</span>
+                    <span class="metric-value" id="red-team-trend">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Last Update:</span>
+                    <span class="metric-value" id="red-team-update">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Metrics -->
+        <div class="panel security-metrics">
+            <div class="panel-header">
+                SECURITY METRICS
+                <button class="refresh-btn" onclick="refreshMetrics()">REFRESH</button>
+            </div>
+            <div class="panel-content">
+                <div class="metric-row">
+                    <span>Total Requests:</span>
+                    <span class="metric-value" id="metrics-total">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Blocked:</span>
+                    <span class="metric-value critical" id="metrics-blocked">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Flagged:</span>
+                    <span class="metric-value warning" id="metrics-flagged">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Allowed:</span>
+                    <span class="metric-value success" id="metrics-allowed">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Avg Risk Score:</span>
+                    <span class="metric-value" id="metrics-risk">--</span>
+                </div>
+                <div class="metric-row">
+                    <span>Processing Latency:</span>
+                    <span class="metric-value" id="metrics-latency">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Regression Alerts -->
+        <div class="panel regression-alerts">
+            <div class="panel-header">
+                REGRESSION ALERTS
+                <button class="refresh-btn" onclick="refreshAlerts()">REFRESH</button>
+            </div>
+            <div class="panel-content" id="alerts-content">
+                Loading alerts...
+            </div>
+        </div>
+
+        <!-- Attack Evolution -->
+        <div class="panel attack-evolution">
+            <div class="panel-header">
+                ATTACK EVOLUTION TREE
+                <button class="refresh-btn" onclick="refreshEvolution()">REFRESH</button>
+            </div>
+            <div class="panel-content">
+                <div class="evolution-tree" id="evolution-tree">
+Loading attack evolution data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        
+        // Update current time
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleTimeString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/data`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateDashboard(data);
+                } else {
+                    console.error('Failed to load dashboard data');
+                    loadMockData();
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                loadMockData();
+            }
+        }
+
+        function updateDashboard(data) {
+            // Update trust score
+            if (data.trustScore) {
+                document.getElementById('trust-score-overall').textContent = data.trustScore.overall + '%';
+                document.getElementById('trust-score-block').textContent = data.trustScore.components.blockRate + '%';
+                document.getElementById('trust-score-fp').textContent = data.trustScore.components.falsePositiveRate + '%';
+                document.getElementById('trust-score-bypass').textContent = data.trustScore.components.bypassRate + '%';
+                document.getElementById('trust-score-trend').textContent = data.trustScore.trend;
+            }
+
+            // Update red team pressure
+            if (data.redTeamPressure) {
+                document.getElementById('red-team-pressure').textContent = data.redTeamPressure.currentPressure + '%';
+                document.getElementById('red-team-active').textContent = data.redTeamPressure.activeAttacks;
+                document.getElementById('red-team-bypasses').textContent = data.redTeamPressure.successfulBypasses;
+                document.getElementById('red-team-trend').textContent = data.redTeamPressure.trend;
+                document.getElementById('red-team-update').textContent = new Date(data.redTeamPressure.lastUpdate).toLocaleTimeString();
+            }
+
+            // Update security metrics
+            if (data.securityMetrics) {
+                const metrics = data.securityMetrics.metrics;
+                document.getElementById('metrics-total').textContent = metrics.totalRequests;
+                document.getElementById('metrics-blocked').textContent = metrics.blockedRequests;
+                document.getElementById('metrics-flagged').textContent = metrics.flaggedRequests;
+                document.getElementById('metrics-allowed').textContent = metrics.totalRequests - metrics.blockedRequests - metrics.flaggedRequests;
+                document.getElementById('metrics-risk').textContent = metrics.averageRiskScore + '%';
+                document.getElementById('metrics-latency').textContent = metrics.processingLatency + 'ms';
+            }
+
+            // Update attack feed
+            if (data.liveAttackFeed) {
+                updateAttackFeed(data.liveAttackFeed);
+            }
+
+            // Update regression alerts
+            if (data.regressionAlerts) {
+                updateRegressionAlerts(data.regressionAlerts);
+            }
+        }
+
+        function updateAttackFeed(attacks) {
+            const feedContent = document.getElementById('attack-feed-content');
+            feedContent.innerHTML = '';
+
+            attacks.forEach(attack => {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                
+                if (attack.data.decision) {
+                    const decision = attack.data.decision.decision.toLowerCase();
+                    entry.classList.add(decision === 'block' ? 'blocked' : decision === 'flag' ? 'flagged' : 'allowed');
+                    
+                    entry.innerHTML = `
+                        <div class="timestamp">[${new Date(attack.timestamp).toLocaleTimeString()}]</div>
+                        <div class="attack-type">${attack.data.decision.attackCategory.type}</div>
+                        <div>Decision: <span class="${decision === 'block' ? 'critical' : decision === 'flag' ? 'warning' : 'success'}">${attack.data.decision.decision}</span></div>
+                        <div>Risk Score: <span class="risk-score">${attack.data.decision.riskScore}%</span></div>
+                        <div>Confidence: ${(attack.data.decision.attackCategory.confidence * 100).toFixed(1)}%</div>
+                    `;
+                } else {
+                    entry.innerHTML = `
+                        <div class="timestamp">[${new Date(attack.timestamp).toLocaleTimeString()}]</div>
+                        <div class="attack-type">${attack.eventType}</div>
+                        <div>Event logged</div>
+                    `;
+                }
+                
+                feedContent.appendChild(entry);
+            });
+        }
+
+        function updateRegressionAlerts(alerts) {
+            const alertsContent = document.getElementById('alerts-content');
+            alertsContent.innerHTML = '';
+
+            if (alerts.length === 0) {
+                alertsContent.innerHTML = '<div class="success">No active alerts</div>';
+                return;
+            }
+
+            alerts.forEach(alert => {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert';
+                alertDiv.innerHTML = `
+                    <div class="alert-header">${alert.severity} - ${alert.alertType}</div>
+                    <div>${alert.message}</div>
+                    <div class="timestamp">Created: ${new Date(alert.createdAt).toLocaleString()}</div>
+                `;
+                alertsContent.appendChild(alertDiv);
+            });
+        }
+
+        function loadMockData() {
+            // Load mock data when API is not available
+            const mockData = {
+                trustScore: {
+                    overall: 75,
+                    components: {
+                        blockRate: 85,
+                        falsePositiveRate: 5,
+                        bypassRate: 10,
+                        regressionPenalty: 0,
+                        explainabilityScore: 80
+                    },
+                    trend: 'STABLE'
+                },
+                redTeamPressure: {
+                    currentPressure: 30,
+                    trend: 'STABLE',
+                    activeAttacks: 5,
+                    successfulBypasses: 1,
+                    lastUpdate: new Date()
+                },
+                securityMetrics: {
+                    metrics: {
+                        totalRequests: 1000,
+                        blockedRequests: 850,
+                        flaggedRequests: 100,
+                        averageRiskScore: 25,
+                        processingLatency: 45
+                    }
+                },
+                liveAttackFeed: [
+                    {
+                        timestamp: new Date(Date.now() - 5 * 60 * 1000),
+                        eventType: 'FIREWALL_DECISION',
+                        data: {
+                            decision: {
+                                decision: 'BLOCK',
+                                riskScore: 95,
+                                attackCategory: {
+                                    type: 'PROMPT_INJECTION',
+                                    confidence: 0.95
+                                }
+                            }
+                        }
+                    },
+                    {
+                        timestamp: new Date(Date.now() - 3 * 60 * 1000),
+                        eventType: 'FIREWALL_DECISION',
+                        data: {
+                            decision: {
+                                decision: 'FLAG',
+                                riskScore: 65,
+                                attackCategory: {
+                                    type: 'JAILBREAK',
+                                    confidence: 0.75
+                                }
+                            }
+                        }
+                    }
+                ],
+                regressionAlerts: []
+            };
+
+            updateDashboard(mockData);
+            
+            // Update evolution tree with mock data
+            document.getElementById('evolution-tree').textContent = `
+[BLOCKED] Gen1 original (70%)
+  ├─ [BYPASS] Gen2 instruction_inversion (92%)
+  │   └─ [BLOCKED] Gen3 semantic_rewriting (85%)
+  └─ [BLOCKED] Gen2 role_shift (65%)
+
+Attack Evolution Stats:
+- Total Attacks: 4
+- Successful Bypasses: 1 (25%)
+- Max Generation: 3
+- Most Effective Strategy: instruction_inversion
+            `;
+        }
+
+        // Refresh functions
+        async function refreshAttackFeed() {
+            await loadDashboardData();
+        }
+
+        async function refreshTrustScore() {
+            await loadDashboardData();
+        }
+
+        async function refreshRedTeam() {
+            await loadDashboardData();
+        }
+
+        async function refreshMetrics() {
+            await loadDashboardData();
+        }
+
+        async function refreshAlerts() {
+            await loadDashboardData();
+        }
+
+        async function refreshEvolution() {
+            try {
+                // Mock evolution tree update
+                const trees = [
+                    `[BLOCKED] Gen1 original (70%)
+  ├─ [BYPASS] Gen2 instruction_inversion (92%)
+  │   └─ [BLOCKED] Gen3 semantic_rewriting (85%)
+  └─ [BLOCKED] Gen2 role_shift (65%)`,
+                    `[BLOCKED] Gen1 jailbreak_attempt (80%)
+  ├─ [BLOCKED] Gen2 payload_encoding (75%)
+  ├─ [BYPASS] Gen2 semantic_rewrite (88%)
+  │   ├─ [BLOCKED] Gen3 role_shift (82%)
+  │   └─ [BYPASS] Gen3 instruction_inversion (94%)
+  └─ [BLOCKED] Gen2 context_manipulation (68%)`
+                ];
+                
+                const randomTree = trees[Math.floor(Math.random() * trees.length)];
+                document.getElementById('evolution-tree').textContent = randomTree + `
+
+Attack Evolution Stats:
+- Total Attacks: ${Math.floor(Math.random() * 10) + 5}
+- Successful Bypasses: ${Math.floor(Math.random() * 3) + 1}
+- Max Generation: ${Math.floor(Math.random() * 3) + 2}
+- Most Effective Strategy: ${['instruction_inversion', 'semantic_rewrite', 'payload_encoding'][Math.floor(Math.random() * 3)]}
+`;
+            } catch (error) {
+                console.error('Error refreshing evolution tree:', error);
+            }
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboardData, 30000);
+
+        // Initial load
+        loadDashboardData();
+    </script>
+</body>
+</html>
